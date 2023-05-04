@@ -97,4 +97,3 @@ if __name__ == "__main__":
 	]
 	get_all_gameweeks(base_url=base_url)
 	get_meta_data(base_url=base_url, elements_to_rename=elements_to_rename)
-	

@@ -138,7 +138,3 @@ else:
 							'assists': 'Assists',
 							'clean_sheets': 'Clean Sheets'
 							}))
-
-
-
-
