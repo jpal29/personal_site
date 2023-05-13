@@ -28,13 +28,16 @@ with graph_col1:
 
 	total_point_series = (
 							player_gameweek_data_chart
-							.mark_line(color='blue')
-							.encode(y=alt.Y('total_points', axis=alt.Axis(title='Total Points')))
+							.mark_line()
+							.encode(y=alt.Y('total_points', axis=alt.Axis(title='Total Points')),
+									color=alt.value("#475ED1"))
 						)
 	cumulative_point_series = (
 								player_gameweek_data_chart
-								.mark_line(color='red')
-								.encode(y=alt.Y('player_cumulative_score', axis=alt.Axis(title='Cumulative Points')))
+								.mark_line()
+								.encode(y=alt.Y('player_cumulative_score', axis=alt.Axis(title='Cumulative Points')),
+										color=alt.value('#F6423C')
+										)
 								)
 	graph_tab_1, data_tab_1 = st.tabs(["Chart", "Data"])
 	with graph_tab_1:
@@ -65,7 +68,9 @@ with graph_col2:
 				x=alt.X('id', axis=alt.Axis(title='Gameweek')),
 				y=alt.Y(
 					graph_metric_lookup[0][graph_metric_option]['column'],
-					axis=alt.Axis(title=graph_metric_option))
+					axis=alt.Axis(title=graph_metric_option)
+					),
+				color=alt.value('#475ED1')
 			)
 		)
 	graph_tab_2, data_tab_2 = st.tabs(["Chart", "Data"])
