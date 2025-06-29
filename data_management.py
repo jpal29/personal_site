@@ -51,21 +51,22 @@ def get_meta_data(base_url, elements_to_rename):
 	gameweek_data = join_for_player_name(gameweek_data, player_data, elements_to_rename)
 	gameweek_data.to_csv(os.path.join(os.path.dirname(__file__), "pages", "data", "gameweek_data.csv"), index=False)
 
+# Get an individual gameweek's data.
 def get_gameweek_data(gw_id):
 	r = requests.get(base_url + 'event/' + str(gw_id) + '/live/').json()
 	gameweek_data = pd.json_normalize(r['elements'])
-	gameweek_data = gameweek_data[['id', 'stats.total_points']].rename(columns={
-		'id': 'player_id',
-		'stats.total_points': 'total_points'
-		})
+	gameweek_data.drop(['explain', 'modified'], axis=1, inplace=True)
+	gameweek_data.columns = gameweek_data.columns.str.replace('stats.', '')
+	gameweek_data.rename(columns={'id': 'player_id'}, inplace=True)
 	gameweek_data['gw_id'] = gw_id
 	return gameweek_data
 
+# Get each player's score by gameweek.
 def get_all_gameweeks(base_url):
 	r = requests.get(base_url + 'bootstrap-static/').json()
 	gameweek_data = pd.DataFrame(r['events'])
 	latest_gameweek = gameweek_data[gameweek_data['average_entry_score'] > 0]['id'].max()
-	
+	print(latest_gameweek)
 	for gameweek in range(1, latest_gameweek + 1):
 		if gameweek == 1:
 			gameweek_df = get_gameweek_data(gameweek)

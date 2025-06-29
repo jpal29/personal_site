@@ -1,6 +1,9 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
+import plotly.figure_factory as ff
+import pandas as pd
+from pathlib import Path
 
 def one_shake_function(att_troop_per_shake, def_troop_per_shake):
     dice = np.arange(1, 7)
@@ -40,35 +43,81 @@ def sim_function(n, attack_number, def_number):
         att_troops_lost_outcome.append(att_troops_lost)
         def_troops_lost_outcome.append(def_troops_lost)
     perc_att_victory = sum(win_outcomes) / n
-    avg_att_troops_lost = np.mean(att_troops_lost_outcome)
-    avg_def_troops_lost = np.mean(def_troops_lost_outcome)
-    return att_troops_lost_outcome, avg_att_troops_lost, def_troops_lost_outcome, avg_def_troops_lost, perc_att_victory
+    attack_df = pd.DataFrame(att_troops_lost_outcome, columns=["Att. Troops Lost"])
+    attack_df = attack_df.groupby('Att. Troops Lost').size().reset_index()
+    attack_df.rename(columns={0: 'Att. Troops Lost Frequency'}, inplace=True)
+    attack_df['Att. Troops - Percent of Total'] = (attack_df['Att. Troops Lost Frequency'] / attack_df['Att. Troops Lost Frequency'].sum())
+
+    defend_df = pd.DataFrame(def_troops_lost_outcome, columns=['Def. Troops Lost'])
+    defend_df = defend_df.groupby('Def. Troops Lost').size().reset_index()
+    defend_df.rename(columns={0: 'Def. Troops Lost Frequency'}, inplace=True)
+    defend_df['Def. Troops - Percent of Total'] = (defend_df['Def. Troops Lost Frequency']/ defend_df['Def. Troops Lost Frequency'].sum())
+
+    results_df = pd.merge(attack_df, defend_df, left_index=True, right_index=True, how='outer')
+
+    return perc_att_victory, results_df
 
 def main():
+    st.set_page_config(layout="wide")
+
     st.title("Risk Attacks Outcome")
 
+    risk_markdown = Path("risk_outcomes.md").read_text()
+    st.markdown(risk_markdown)
+
     # Sidebar
-    att_troop_num = st.sidebar.number_input("Number of attacking troops", min_value=1, max_value=100, value=1)
-    def_troop_num = st.sidebar.number_input("Number of defending troops", min_value=1, max_value=100, value=1)
+    att_troop_num = st.sidebar.number_input("Number of attacking troops", min_value=1, max_value=100, value=10)
+    def_troop_num = st.sidebar.number_input("Number of defending troops", min_value=1, max_value=100, value=5)
+    simulations = st.sidebar.number_input("Simulations", min_value = 1, max_value=100000, value=10000)
+
+    perc_att_victory, results_df = sim_function(n=simulations, attack_number=att_troop_num, def_number=def_troop_num)
 
     if st.sidebar.button("Simulate"):
-        st.text("Simulating Outcomes")
-        att_troops_lost_outcome, avg_att_troops_lost, def_troops_lost_outcome, avg_def_troops_lost, perc_att_victory = sim_function(
-            n=10000, attack_number=att_troop_num, def_number=def_troop_num
-        )
-        st.text(f"Probability of Attack Win: {perc_att_victory:.2%}")
-        st.text(f"Expected Attacking Troops Lost: {avg_att_troops_lost:.2f}")
-        st.text(f"Expected Defending Troops Lost: {avg_def_troops_lost:.2f}")
+        perc_att_victory, results_df = sim_function(n=simulations, attack_number=att_troop_num, def_number=def_troop_num)
 
-        st.subheader("Distribution of Attacking Troops Lost")
-        att_troop_hist = go.Histogram(x=att_troops_lost_outcome, nbinsx=att_troop_num, showlegend=False)
-        att_troop_layout = go.Layout(xaxis=dict(title="Attacking Troops Lost"), yaxis=dict(title="Count"), showlegend=False)
-        st.plotly_chart(go.Figure(data=[att_troop_hist], layout=att_troop_layout), use_container_width=True)
+    avg_att_troops_lost = (results_df['Att. Troops - Percent of Total'] * results_df['Att. Troops Lost']).sum()
+    avg_def_troops_lost = (results_df['Def. Troops - Percent of Total'] * results_df['Def. Troops Lost']).sum()
 
-        st.subheader("Distribution of Defending Troops Lost")
-        def_troop_hist = go.Histogram(x=def_troops_lost_outcome, nbinsx=def_troop_num, showlegend=False)
-        def_troop_layout = go.Layout(xaxis=dict(title="Defending Troops Lost"), yaxis=dict(title="Count"), showlegend=False)
-        st.plotly_chart(go.Figure(data=[def_troop_hist], layout=def_troop_layout), use_container_width=True)
+    result_output_df = pd.DataFrame.from_dict({'Expected Attacking Troops Lost': [f'{avg_att_troops_lost:.2f}'],
+                                                'Expected Defending Troops Lost': [f'{avg_def_troops_lost:.2f}'],
+                                                'Probability of Attack Win': [f'{perc_att_victory:.1%}']})
+
+    result_output_df.index = ['Values']*len(result_output_df)
+    result_output_df = result_output_df.T
+
+
+    fig = go.Figure(go.Scatter(x=results_df['Att. Troops Lost'],
+                                y=results_df['Att. Troops - Percent of Total'],
+                                mode='lines+markers',
+                                name = 'Attacking Troops'))
+
+    fig.add_trace(go.Scatter(x=results_df['Def. Troops Lost'],
+                                y=results_df['Def. Troops - Percent of Total'],
+                                mode='lines+markers',
+                                name='Defending Troops'))
+
+    fig.add_trace(go.Scatter(x=[avg_att_troops_lost]*11,
+                                y=np.arange(0, 1.1, .1),
+                                mode='lines',
+                                line=dict(dash='dash', color='black'),
+                                name='Expected Attacking Troops Lost'))
+
+    fig.add_trace(go.Scatter(x=[avg_def_troops_lost]*11,
+                                y=np.arange(0, 1.1, .1),
+                                mode='lines',
+                                line=dict(dash='dash', color='gray'),
+                                name='Expected Defending Troops Lost'))
+    fig.update_yaxes(range=[0, 1.05])
+    fig.update_layout(xaxis_title='Troops Lost',
+                        yaxis_title='Likelihood of loss',
+                        showlegend=True,
+                        yaxis=dict(tickformat='.2%'))
+    chart_column, table_column = st.columns([.7, .3], vertical_alignment="center")
+
+    with chart_column:
+        st.plotly_chart(fig, use_container_width=True)
+    with table_column:
+        st.table(result_output_df)
 
 
 if __name__ == "__main__":
