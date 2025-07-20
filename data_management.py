@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from pprint import pprint
+from datetime import datetime
 
 def join_for_player_name(gameweek_df, player_data_df, elements_to_rename):
 	for element in elements_to_rename:
@@ -66,8 +67,11 @@ def get_all_gameweeks(base_url):
 	r = requests.get(base_url + 'bootstrap-static/').json()
 	gameweek_data = pd.DataFrame(r['events'])
 	latest_gameweek = gameweek_data[gameweek_data['average_entry_score'] > 0]['id'].max()
-	print(latest_gameweek)
+	first_gameweek_date = gameweek_data['deadline_time'].iloc[0]
+	first_gameweek_date = datetime.fromisoformat(first_gameweek_date.replace('Z', '+00:00'))
+	
 	for gameweek in range(1, latest_gameweek + 1):
+		print(f'Getting gameweek {gameweek} data')
 		if gameweek == 1:
 			gameweek_df = get_gameweek_data(gameweek)
 		else:
@@ -85,7 +89,10 @@ def get_all_gameweeks(base_url):
 
 	gameweek_df = gameweek_df.drop(['id'], axis=1)
 	gameweek_df['player_cumulative_score'] = gameweek_df.groupby(['player_id'])['total_points'].cumsum()
-	gameweek_df.to_csv(os.path.join(os.path.dirname(__file__), "pages", "data", "all_gameweek_player_data.csv"), index=False)
+	gameweek_df.to_csv(os.path.join(os.path.dirname(__file__),
+						"pages",
+						"data",
+						f"{first_gameweek_date.year + 1}_{first_gameweek_date.year}_all_gameweek_player_data.csv"), index=False)
 
 
 if __name__ == "__main__":
