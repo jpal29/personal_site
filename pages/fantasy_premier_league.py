@@ -3,143 +3,165 @@ import altair as alt
 import pandas as pd
 import os
 
+st.set_page_config(layout="wide")
 
-gameweek_data=pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'gameweek_data.csv'))
-player_gameweek_data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'all_gameweek_player_data.csv'), index_col=False)
-player_data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'player_data.csv'))
+# Create inputs for filters
+seasons = [
+	{'display': '2025 - 2026', 'value': '2025_2026'},
+	{'display': '2024 - 2025', 'value': '2024_2025'}
+]
 
-graph_col1, padding, graph_col2 = st.columns((80, 40, 80), gap="large")
+seasons_option_values = [season['value'] for season in seasons]
 
-with graph_col1:
-	st.subheader("Player Performance by Gameweek")
-	player_graph_option = st.selectbox(
-		'Select Player',
-		(player for player in sorted(player_gameweek_data['full_name'].unique()))
+chart_coloring_dimensions = [
+	{'display': 'Team', 'value': 'team_name'},
+	{'display': 'Position', 'value': 'position'},
+	{'display': 'Player Name', 'value': 'full_name'}
+]
+
+coloring_dimension_values = [dimension['value'] for dimension in chart_coloring_dimensions]
+
+metrics = [
+	{'display': 'Points', 'value': 'total_points'},
+	{'display': 'Goals Scored', 'value': 'goals_scored'},
+	{'display': 'Assists', 'value': 'assists'},
+	{'display': 'Clean Sheets', 'value': 'clean_sheets'},
+	{'display': 'Goals Conceded', 'value': 'goals_conceded'},
+	{'display': 'Expected Goals', 'value': 'expected_goals'},
+	{'display': 'Expected Assists', 'value': 'expected_assists'},
+	{'display': 'Expected Goals Conceded', 'value': 'expected_goals_conceded'}
+]
+
+metric_option_values = [metric['value'] for metric in metrics]
+
+def format_option_display(option_value):
+	for season in seasons:
+		if season['value'] == option_value:
+			return season['display']
+	for dimension in chart_coloring_dimensions:
+		if dimension['value'] == option_value:
+			return dimension['display']
+	for metric in metrics:
+		if metric['value'] == option_value:
+			return metric['display']
+	return option_value
+
+## Layout filters and select data
+first_row_cols = st.columns(3)
+second_row_cols = st.columns(3)
+with first_row_cols[0]:
+	selected_season = st.selectbox(
+		'Select season',
+		options = seasons_option_values,
+		index=0,
+		format_func=format_option_display
+	)
+with first_row_cols[1]:
+	selected_coloring_dimension = st.selectbox(
+	'Select coloring dimension',
+	options = coloring_dimension_values,
+	index=None,
+	format_func=format_option_display
+)
+with first_row_cols[2]:
+	selected_metric = st.selectbox(
+		'Select metric',
+		options = metric_option_values,
+		index = 0,
+		format_func=format_option_display
 	)
 
-	filtered_player_data = player_gameweek_data[player_gameweek_data['full_name'] == player_graph_option]
+@st.cache_data
+def load_data(selected_season):
+	gameweek_data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', f'{selected_season}_filtered_gameweek_player_data.csv'))
+	player_data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', f'{selected_season}_player_data_summary.csv'))
+	player_data_cost_df = player_data[['player_id', 'now_cost']]
+	gameweek_data = pd.merge(gameweek_data, player_data_cost_df, on='player_id', how='left')
+	return gameweek_data, player_data
 
-	player_gameweek_data_chart = (
-			alt.Chart(
-					data=filtered_player_data[['total_points', 'player_cumulative_score', 'gw_id']]
-			)
-			.encode(x=alt.X('gw_id', axis=alt.Axis(title='Gameweek')))
-		)
+gameweek_data, player_data = load_data(selected_season)
 
-	total_point_series = (
-							player_gameweek_data_chart
-							.mark_line()
-							.encode(y=alt.Y('total_points', axis=alt.Axis(title='Total Points')),
-									color=alt.value("#475ED1"))
-						)
-	cumulative_point_series = (
-								player_gameweek_data_chart
-								.mark_line()
-								.encode(y=alt.Y('player_cumulative_score', axis=alt.Axis(title='Cumulative Points')),
-										color=alt.value('#F6423C')
-										)
-								)
-	graph_tab_1, data_tab_1 = st.tabs(["Chart", "Data"])
-	with graph_tab_1:
-		st.altair_chart(alt.layer(cumulative_point_series, total_point_series).resolve_scale(y='independent'))
-	
-	with data_tab_1:
-		st.write(filtered_player_data[['gw_id', 'total_points', 'player_cumulative_score']])
+with second_row_cols[0]:
+	player_graph_option = st.multiselect(
+		'Select Players',
+		(player for player in sorted(gameweek_data['full_name'].unique()))
+	)
+
+	if player_graph_option:
+		filtered_gameweek_data = gameweek_data[gameweek_data['full_name'].isin(player_graph_option)]
+	else:
+		filtered_gameweek_data = gameweek_data
+with second_row_cols[1]:
+	team_graph_option = st.multiselect(
+		'Select Teams',
+		(team for team in sorted(gameweek_data['team_name'].unique()))
+	)
+
+	if team_graph_option:
+		filtered_gameweek_data = filtered_gameweek_data[filtered_gameweek_data['team_name'].isin(team_graph_option)]
+with second_row_cols[2]:
+	position_graph_option = st.multiselect(
+		'Select Positions',
+		(position for position in sorted(gameweek_data['position'].unique()))
+	)
+
+	if position_graph_option:
+		filtered_gameweek_data = filtered_gameweek_data[filtered_gameweek_data['position'].isin(position_graph_option)]
 
 
-with graph_col2:
-	st.subheader("Gameweek Performance")
-	graph_metric_lookup = [{
-		'Average Team Score': {'column': 'average_entry_score'},
-		'Highest Team Score': {'column': 'highest_score'}
-	}]
 
-	graph_metric_option = st.selectbox(
-			'Choose Gameweek Metric',
-			(metric for metric in graph_metric_lookup[0])
-		)
-
-	gameweek_data_chart = (
-			alt.Chart(
-				data=gameweek_data
-			)
-			.mark_line()
+## Create charts
+viz_columns = st.columns((80, 10, 80))
+metric_display_name = format_option_display(selected_metric)
+with viz_columns[0]:
+	st.subheader("Player Performance by Gameweek")
+	if selected_coloring_dimension:
+		avg_gameweek_points = filtered_gameweek_data.groupby(['gw_id', selected_coloring_dimension])[selected_metric].mean().round(2).reset_index()
+		player_gameweek_data_chart = (
+			alt.Chart(data=avg_gameweek_points)
+			.mark_line(point=True)
 			.encode(
-				x=alt.X('id', axis=alt.Axis(title='Gameweek')),
-				y=alt.Y(
-					graph_metric_lookup[0][graph_metric_option]['column'],
-					axis=alt.Axis(title=graph_metric_option)
-					),
-				color=alt.value('#475ED1')
+				x=alt.X('gw_id', title='Gameweek'),
+				y=alt.Y(selected_metric, title=metric_display_name),
+				color=alt.Color(selected_coloring_dimension, title=selected_coloring_dimension.replace('_', ' ').title())
 			)
 		)
-	graph_tab_2, data_tab_2 = st.tabs(["Chart", "Data"])
-	with graph_tab_2:
-		st.altair_chart(gameweek_data_chart)
+	elif selected_coloring_dimension is None:
+		avg_gameweek_points = filtered_gameweek_data.groupby(['gw_id'])[selected_metric].mean().round(2).reset_index()
+		player_gameweek_data_chart = (
+			alt.Chart(data=avg_gameweek_points)
+			.mark_line(point=True)
+			.encode(x=alt.X('gw_id', title='Gameweek'), y=alt.Y(selected_metric, title=metric_display_name))
+		)
 
-	with data_tab_2:
-		st.write(gameweek_data[['id', graph_metric_lookup[0][graph_metric_option]['column']]])
-
-st.write("Gameweek Stats")
-st.dataframe(data=gameweek_data[['id',
-					'average_entry_score',
-					'highest_score',
-					'top_element_full_name',
-					'most_captained_full_name',
-					'most_vice_captained_full_name']]
-					.rename(columns={
-						'id': 'Gameweek',
-						'average_entry_score': 'Average Score',
-						'highest_score': 'Highest Score',
-						'top_element_full_name': 'Highest Scoring Player',
-						'most_captained_full_name': 'Most Captained',
-						'most_vice_captained_full_name': 'Most Vice Captained'
-						}))
-
-players = player_data['full_name']
-pick_players = st.multiselect('Select Player', players)
-
-player_stats_filtered = player_data[player_data['full_name'].isin(pick_players)]
-st.write("Player Stats")
-if len(pick_players) > 0:
-	st.dataframe(data=player_stats_filtered[['full_name',
-						'position',
-						'total_points',
-						'points_per_game',
-						'now_cost',
-						'goals_scored',
-						'expected_goals_per_90',
-						'assists',
-						'clean_sheets']]
-						.rename(columns={
-							'full_name': 'Name',
-							'position': 'Position',
-							'total_points': 'Total Points',
-							'points_per_game': 'Points per Game',
-							'now_cost': 'Cost',
-							'goals_scored': 'Goals Scored',
-							'expected_goals_per_90': 'Expected Goals per 90',
-							'assists': 'Assists',
-							'clean_sheets': 'Clean Sheets'
-							}))
-else:
-	st.dataframe(data=player_data[['full_name',
-						'position',
-						'total_points',
-						'points_per_game',
-						'now_cost',
-						'goals_scored',
-						'expected_goals_per_90',
-						'assists',
-						'clean_sheets']]
-						.rename(columns={
-							'full_name': 'Name',
-							'position': 'Position',
-							'total_points': 'Total Points',
-							'points_per_game': 'Points per Game',
-							'now_cost': 'Cost',
-							'goals_scored': 'Goals Scored',
-							'expected_goals_per_90': 'Expected Goals per 90',
-							'assists': 'Assists',
-							'clean_sheets': 'Clean Sheets'
-							}))
+	st.altair_chart(player_gameweek_data_chart)
+with viz_columns[2]:
+	st.subheader("Player Performance by Gameweek")
+	player_summary = filtered_gameweek_data.groupby(['full_name', 'position', 'team_name', 'now_cost'])[selected_metric].mean().round(2).reset_index()
+	if selected_coloring_dimension:
+		player_summary_scatter_chart = alt.Chart(player_summary).mark_point().encode(
+			x=alt.X('now_cost', title='Now Cost'),
+			y=alt.Y(selected_metric, title=metric_display_name),
+			color=alt.Color(selected_coloring_dimension, title=selected_coloring_dimension.replace('_', ' ').title()),
+			tooltip=[
+						alt.Tooltip('full_name', title='Full Name'),
+						alt.Tooltip(selected_metric, title=metric_display_name),
+						alt.Tooltip('now_cost', title='Now Cost'),
+						alt.Tooltip('position', title='Position'),
+						alt.Tooltip('team_name', title='Team Name')
+					]
+		)
+	elif selected_coloring_dimension is None:
+		player_summary_scatter_chart = alt.Chart(player_summary).mark_point().encode(
+			x=alt.X('now_cost', title='Cost'),
+			y=alt.Y(selected_metric, title=metric_display_name),
+			tooltip=[
+						alt.Tooltip('full_name', title='Full Name'),
+						alt.Tooltip(selected_metric, title=metric_display_name),
+						alt.Tooltip('now_cost', title='Cost'),
+						alt.Tooltip('position', title='Position'),
+						alt.Tooltip('team_name', title='Team Name')
+					]
+		)
+	
+	st.altair_chart(player_summary_scatter_chart)

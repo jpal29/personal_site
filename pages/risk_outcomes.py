@@ -5,6 +5,8 @@ import plotly.figure_factory as ff
 import pandas as pd
 from pathlib import Path
 
+st.set_page_config(layout="wide")
+
 def one_shake_function(att_troop_per_shake, def_troop_per_shake):
     dice = np.arange(1, 7)
     att_shake = np.sort(np.random.choice(dice, size=att_troop_per_shake, replace=True))[::-1]
