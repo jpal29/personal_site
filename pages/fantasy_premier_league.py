@@ -136,7 +136,7 @@ with viz_columns[0]:
 
 	st.altair_chart(player_gameweek_data_chart)
 with viz_columns[2]:
-	st.subheader("Player Performance by Gameweek")
+	st.subheader("Player Performance vs Cost")
 	player_summary = filtered_gameweek_data.groupby(['full_name', 'position', 'team_name', 'now_cost'])[selected_metric].mean().round(2).reset_index()
 	if selected_coloring_dimension:
 		player_summary_scatter_chart = alt.Chart(player_summary).mark_point().encode(
